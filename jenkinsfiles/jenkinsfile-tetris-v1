@@ -1,0 +1,66 @@
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk17'
+        nodejs 'node16'
+    }
+    environment {
+        SCANNER_HOME=tool 'sonar-scanner'
+    }
+    stages {
+        stage('Git checkout') {
+            steps {
+               git branch: 'main', url: 'https://github.com/bnloky/Tetris-V1.git'
+            }
+        }
+        stage('Sonar analaysis') {
+            steps {
+              withSonarQubeEnv('sonar-server') {
+                  sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Tetrisversion1.0 \
+                  -Dsonar.projectKey=Tetrisversion1.0'''
+              }
+            }
+        }
+        stage('Quality gate') {
+            steps {
+               script {
+                   waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+               }
+            }
+        }
+        stage('NPM install') {
+            steps {
+               sh 'npm install'
+            }
+        }
+        stage('trivy scan the file ') {
+            steps {
+               sh 'trivy fs . > trivyfs.txt'
+            }
+        }
+        stage('OWASP FS SCAN') {
+            steps {
+                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'Dp-check'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        stage('Docker build and push ') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        sh ''' 
+                        docker build -t tetrisv1 .
+                        docker tag  tetrisv1 iamloky/tetrisv1:latest
+                        docker push iamloky/tetrisv1:latest
+                        '''
+                    }
+                }
+            }
+        }
+        stage('trivy image scan ') {
+            steps {
+               sh 'trivy image iamloky/tetrisv1:latest > trivyimage.txt '
+            }
+        }
+    }
+}
