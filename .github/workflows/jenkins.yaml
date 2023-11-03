@@ -1,9 +1,7 @@
-name: Create Lambda Function
+name: Create Jenkins-server
 
 on:
-  push:
-    branches:
-      - main  # Adjust the branch name as needed
+  workflow_dispatch:
 
 jobs:
   build:
